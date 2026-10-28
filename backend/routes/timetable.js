@@ -14,13 +14,16 @@ router.get('/teacher/my', timetableController.getMyTimetable);
 // GET /api/timetable
 router.get('/', timetableController.getTimetable);
 
-// POST /api/timetable (admin only)
-router.post('/', authorize('admin'), timetableController.createTimetable);
+// GET /api/timetable/teachers — get list of teachers for slot assignment
+router.get('/teachers', timetableController.getTeachers);
 
-// PUT /api/timetable/:id (admin only)
-router.put('/:id', authorize('admin'), timetableController.updateTimetable);
+// POST /api/timetable (admin and teacher)
+router.post('/', authorize('admin', 'teacher'), timetableController.createTimetable);
 
-// DELETE /api/timetable/:id (admin only)
-router.delete('/:id', authorize('admin'), timetableController.deleteTimetable);
+// PUT /api/timetable/:id (admin and teacher)
+router.put('/:id', authorize('admin', 'teacher'), timetableController.updateTimetable);
+
+// DELETE /api/timetable/:id (admin and teacher)
+router.delete('/:id', authorize('admin', 'teacher'), timetableController.deleteTimetable);
 
 module.exports = router;

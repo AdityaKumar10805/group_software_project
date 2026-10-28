@@ -119,6 +119,64 @@ async function runTests() {
   });
   assert(currentSlot.status === 200 && currentSlot.body.currentTime, 'Current Lecture Detection');
 
+  // 8a. Slot Creation by Teacher
+  const createSlotRes = await request(
+    {
+      host: 'localhost',
+      port: 5001,
+      path: '/api/timetable',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${teacherToken}`,
+      },
+    },
+    {
+      day: 'Saturday',
+      startTime: '17:00',
+      endTime: '18:00',
+      subject: 'DevOps & CI/CD',
+      className: 'CS-A',
+      section: 'A',
+      room: 'Lab 9',
+    }
+  );
+  assert(createSlotRes.status === 201 && createSlotRes.body.slot?._id, 'Teacher Creates Timetable Slot');
+  const tempSlotId = createSlotRes.body?.slot?._id;
+
+  // 8b. Slot Update by Teacher
+  const updateSlotRes = await request(
+    {
+      host: 'localhost',
+      port: 5001,
+      path: `/api/timetable/${tempSlotId}`,
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${teacherToken}`,
+      },
+    },
+    {
+      subject: 'DevOps & Automated Testing',
+      room: 'Lab 10',
+    }
+  );
+  assert(
+    updateSlotRes.status === 200 && updateSlotRes.body.slot?.subject === 'DevOps & Automated Testing',
+    'Teacher Updates Timetable Slot'
+  );
+
+  // 8c. Teardown temporary slot
+  if (tempSlotId) {
+    await request({
+      host: 'localhost',
+      port: 5001,
+      path: `/api/timetable/${tempSlotId}`,
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${teacherToken}` },
+    });
+  }
+
   // 9. Clean up any existing attendance for test student today to guarantee idempotency
   const newStudentId = 'STU2024018';
   const existingList = await request({

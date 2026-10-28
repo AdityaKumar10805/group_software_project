@@ -1,4 +1,5 @@
 const Timetable = require('../models/Timetable');
+const User = require('../models/User');
 
 // GET /api/timetable
 exports.getTimetable = async (req, res) => {
@@ -55,40 +56,80 @@ exports.getCurrentLecture = async (req, res) => {
   }
 };
 
-// POST /api/timetable
+// POST /api/timetable (admin and teacher)
 exports.createTimetable = async (req, res) => {
   try {
-    const slot = await Timetable.create(req.body);
+    const slotData = { ...req.body };
+    if (!slotData.teacher) {
+      slotData.teacher = req.user._id;
+    }
+    const slot = await Timetable.create(slotData);
+    await slot.populate('teacher', 'name email department');
     res.status(201).json({ message: 'Timetable slot created', slot });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Create timetable error:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
-// PUT /api/timetable/:id
+// PUT /api/timetable/:id (admin and teacher)
 exports.updateTimetable = async (req, res) => {
   try {
-    const slot = await Timetable.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const slot = await Timetable.findById(req.params.id);
     if (!slot) {
       return res.status(404).json({ message: 'Timetable slot not found' });
     }
-    res.json({ message: 'Timetable slot updated', slot });
+
+    // Teachers can update their own slots, admin can update any slot
+    if (req.user.role === 'teacher' && slot.teacher.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only update your own timetable slots' });
+    }
+
+    const updateData = { ...req.body };
+    if (req.user.role === 'teacher') {
+      updateData.teacher = req.user._id;
+    }
+
+    const updatedSlot = await Timetable.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate('teacher', 'name email department');
+
+    res.json({ message: 'Timetable slot updated', slot: updatedSlot });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Update timetable error:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
-// DELETE /api/timetable/:id
+// DELETE /api/timetable/:id (admin and teacher)
 exports.deleteTimetable = async (req, res) => {
   try {
-    const slot = await Timetable.findByIdAndDelete(req.params.id);
+    const slot = await Timetable.findById(req.params.id);
     if (!slot) {
       return res.status(404).json({ message: 'Timetable slot not found' });
     }
+
+    // Teachers can delete their own slots, admin can delete any slot
+    if (req.user.role === 'teacher' && slot.teacher.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only delete your own timetable slots' });
+    }
+
+    await Timetable.findByIdAndDelete(req.params.id);
     res.json({ message: 'Timetable slot deleted' });
+  } catch (error) {
+    console.error('Delete timetable error:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+// GET /api/timetable/teachers — get instructors list for slot assignment
+exports.getTeachers = async (req, res) => {
+  try {
+    const teachers = await User.find({ role: { $in: ['teacher', 'admin'] }, isActive: true })
+      .select('name email department role')
+      .sort({ name: 1 });
+    res.json({ teachers });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

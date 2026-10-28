@@ -65,6 +65,7 @@ export const timetableAPI = {
   getAll: (params) => api.get('/timetable', { params }),
   getCurrent: () => api.get('/timetable/current'),
   getMy: () => api.get('/timetable/teacher/my'),
+  getTeachers: () => api.get('/timetable/teachers'),
   create: (data) => api.post('/timetable', data),
   update: (id, data) => api.put(`/timetable/${id}`, data),
   delete: (id) => api.delete(`/timetable/${id}`),
