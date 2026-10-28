@@ -22,7 +22,7 @@ exports.getTimetable = async (req, res) => {
   }
 };
 
-// GET /api/timetable/current — get current lecture
+// GET /api/timetable/current — get current lecture(s)
 exports.getCurrentLecture = async (req, res) => {
   try {
     const now = new Date();
@@ -30,22 +30,17 @@ exports.getCurrentLecture = async (req, res) => {
     const dayName = days[now.getDay()];
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    // 1. Try to find active slot for the logged-in teacher first
-    let currentSlot = await Timetable.findOne({
+    // 1. Find ALL slots currently active right now for today (handles coinciding slots)
+    const activeSlots = await Timetable.find({
       day: dayName,
-      teacher: req.user._id,
       startTime: { $lte: currentTime },
       endTime: { $gte: currentTime },
     }).populate('teacher', 'name email department');
 
-    // 2. If not found (e.g. user is admin, or subbing), find ANY active slot right now
-    if (!currentSlot) {
-      currentSlot = await Timetable.findOne({
-        day: dayName,
-        startTime: { $lte: currentTime },
-        endTime: { $gte: currentTime },
-      }).populate('teacher', 'name email department');
-    }
+    // 2. Primary current slot: try logged-in teacher's active slot first, or the first active slot
+    let currentSlot = activeSlots.find(
+      (s) => s.teacher && (s.teacher._id.toString() === req.user._id.toString() || s.teacher.toString() === req.user._id.toString())
+    ) || activeSlots[0] || null;
 
     // 3. Get today's slots (all slots for admin, or teacher's slots with fallback to all today's slots)
     let todaySlots = [];
@@ -70,6 +65,7 @@ exports.getCurrentLecture = async (req, res) => {
 
     res.json({
       currentSlot,
+      activeSlots,
       todaySlots,
       currentDay: dayName,
       currentTime,

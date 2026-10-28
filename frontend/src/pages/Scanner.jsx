@@ -27,6 +27,7 @@ const Scanner = () => {
   const location = useLocation();
   const [scanning, setScanning] = useState(false);
   const [currentLecture, setCurrentLecture] = useState(null);
+  const [activeSlots, setActiveSlots] = useState([]);
   const [todaySlots, setTodaySlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState('');
   const [simulatedId, setSimulatedId] = useState('');
@@ -49,13 +50,23 @@ const Scanner = () => {
   const loadCurrentLecture = async (notify = false) => {
     try {
       const res = await timetableAPI.getCurrent();
-      setCurrentLecture(res.data.currentSlot);
-      setTodaySlots(res.data.todaySlots || []);
-      if (res.data.currentSlot) {
-        setSelectedSlot(res.data.currentSlot._id);
-        if (notify) toast.success(`Current lecture: ${res.data.currentSlot.subject}`);
-      } else {
-        if (notify) toast('No active lecture found for current time', { icon: 'ℹ️' });
+      const current = res.data.currentSlot;
+      const active = res.data.activeSlots || [];
+      const today = res.data.todaySlots || [];
+
+      setCurrentLecture(current);
+      setActiveSlots(active);
+      setTodaySlots(today);
+
+      setSelectedSlot((prev) => {
+        // Keep previous manual selection if valid
+        if (prev && today.some((s) => s._id === prev)) return prev;
+        return current?._id || active[0]?._id || today[0]?._id || '';
+      });
+
+      if (notify) {
+        if (current) toast.success(`Current lecture: ${current.subject}`);
+        else toast('Timetable refreshed', { icon: '🔄' });
       }
     } catch (err) {
       console.error('Error loading timetable:', err);
@@ -154,25 +165,44 @@ const Scanner = () => {
     }
   };
 
+  const effectiveSlot = todaySlots.find((s) => s._id === selectedSlot) || currentLecture || activeSlots[0] || null;
+  const isActiveNow = effectiveSlot && activeSlots.some((s) => s._id === effectiveSlot._id);
+
   return (
     <div className="scanner-container">
-      {/* Current Lecture Info */}
-      {currentLecture ? (
-        <div className="current-lecture-card" style={{ borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.08)' }}>
-          <div className="lecture-icon" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+      {/* Current / Selected Lecture Info Card */}
+      {effectiveSlot ? (
+        <div
+          className="current-lecture-card"
+          style={{
+            borderColor: isActiveNow ? 'rgba(16,185,129,0.3)' : 'rgba(99,102,241,0.3)',
+            background: isActiveNow ? 'rgba(16,185,129,0.08)' : 'rgba(99,102,241,0.08)',
+          }}
+        >
+          <div
+            className="lecture-icon"
+            style={{
+              background: isActiveNow
+                ? 'linear-gradient(135deg, #10b981, #059669)'
+                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            }}
+          >
             <HiOutlineBookOpen />
           </div>
           <div className="current-lecture-info" style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h3>{currentLecture.subject}</h3>
-              <span className="badge badge-present" style={{ fontSize: 10, padding: '2px 8px' }}>
-                ● Active Now
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h3>{effectiveSlot.subject}</h3>
+              <span
+                className={`badge ${isActiveNow ? 'badge-present' : 'badge-late'}`}
+                style={{ fontSize: 10, padding: '2px 8px' }}
+              >
+                {isActiveNow ? '● In Session Now' : '● Manually Selected'}
               </span>
             </div>
             <p>
-              {currentLecture.startTime} – {currentLecture.endTime} • Room{' '}
-              {currentLecture.room || 'Main'} • {currentLecture.className}-{currentLecture.section}
-              {currentLecture.teacher?.name && ` • 👨‍🏫 ${currentLecture.teacher.name}`}
+              {effectiveSlot.startTime} – {effectiveSlot.endTime} • Room{' '}
+              {effectiveSlot.room || 'Main'} • {effectiveSlot.className}-{effectiveSlot.section}
+              {effectiveSlot.teacher?.name && ` • 👨‍🏫 ${effectiveSlot.teacher.name}`}
             </p>
           </div>
           <button
@@ -191,8 +221,8 @@ const Scanner = () => {
             <HiOutlineExclamationTriangle />
           </div>
           <div className="current-lecture-info" style={{ flex: 1 }}>
-            <h3>No active lecture detected for right now</h3>
-            <p>Select a timetable slot below or update slot timings in Timetable</p>
+            <h3>No lecture slot selected</h3>
+            <p>Select a timetable slot below to record attendance</p>
           </div>
           <button
             type="button"
@@ -206,13 +236,38 @@ const Scanner = () => {
         </div>
       )}
 
-      {/* Slot selector */}
+      {/* Coinciding / Multiple Active Lectures Quick Switcher */}
+      {activeSlots.length > 1 && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(99,102,241,0.06)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
+            ⚡ {activeSlots.length} Coinciding Lectures in Session Right Now — Quick Select:
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {activeSlots.map((slot) => {
+              const isChosen = selectedSlot === slot._id;
+              return (
+                <button
+                  key={slot._id}
+                  type="button"
+                  className={`btn btn-sm ${isChosen ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSelectedSlot(slot._id)}
+                  style={{ fontSize: 12 }}
+                >
+                  {isChosen ? '✓ ' : ''}{slot.subject} ({slot.startTime}–{slot.endTime} • {slot.className}-{slot.section})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Target Lecture Slot Selector */}
       {todaySlots.length > 0 && (
         <div className="form-group" style={{ marginBottom: 20 }}>
           <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Target Lecture Slot</span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {selectedSlot ? 'Slot Selected' : 'Auto-detecting from schedule'}
+            <span>Target Lecture Slot (Select to Mark Attendance)</span>
+            <span style={{ fontSize: 11, color: 'var(--accent-primary)', fontWeight: 600 }}>
+              {effectiveSlot ? `Marking for: ${effectiveSlot.subject} (${effectiveSlot.className}-${effectiveSlot.section})` : 'Choose slot'}
             </span>
           </label>
           <select
@@ -220,20 +275,16 @@ const Scanner = () => {
             value={selectedSlot}
             onChange={(e) => setSelectedSlot(e.target.value)}
           >
-            {currentLecture ? (
-              <option value={currentLecture._id}>
-                ⚡ Auto-Detected Active: {currentLecture.subject} ({currentLecture.startTime}-{currentLecture.endTime})
-              </option>
-            ) : (
-              <option value="">⚡ Auto-detect based on current time</option>
-            )}
-            {todaySlots
-              .filter((slot) => !currentLecture || slot._id !== currentLecture._id)
-              .map((slot) => (
+            {todaySlots.map((slot) => {
+              const active = activeSlots.some((a) => a._id === slot._id);
+              return (
                 <option key={slot._id} value={slot._id}>
-                  {slot.startTime}–{slot.endTime} | {slot.subject} | {slot.className}-{slot.section} (Room {slot.room || '—'})
+                  {active ? '🟢 [IN SESSION] ' : '🕒 '}
+                  {slot.subject} | {slot.startTime}–{slot.endTime} | {slot.className}-{slot.section} | Room {slot.room || '—'}
+                  {slot.teacher?.name ? ` (${slot.teacher.name})` : ''}
                 </option>
-              ))}
+              );
+            })}
           </select>
         </div>
       )}
