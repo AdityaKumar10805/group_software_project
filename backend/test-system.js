@@ -119,8 +119,28 @@ async function runTests() {
   });
   assert(currentSlot.status === 200 && currentSlot.body.currentTime, 'Current Lecture Detection');
 
-  // 9. Scan Attendance with Unique Student
+  // 9. Clean up any existing attendance for test student today to guarantee idempotency
   const newStudentId = 'STU2024018';
+  const existingList = await request({
+    host: 'localhost',
+    port: 5001,
+    path: `/api/attendance?studentId=${newStudentId}`,
+    method: 'GET',
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  if (existingList.body?.attendance?.length > 0) {
+    for (const rec of existingList.body.attendance) {
+      await request({
+        host: 'localhost',
+        port: 5001,
+        path: `/api/attendance/${rec._id}`,
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+    }
+  }
+
+  // Record Attendance Scan
   const scanRes = await request(
     {
       host: 'localhost',
@@ -135,6 +155,7 @@ async function runTests() {
     { studentId: newStudentId, timetableSlotId: sampleSlot._id }
   );
   assert(scanRes.status === 201 && scanRes.body.success === true, 'Attendance Scan Execution', `(${scanRes.body?.message || scanRes.status})`);
+  const createdRecordId = scanRes.body?.attendance?.id;
 
   // 10. Duplicate Scan Check
   const duplicateRes = await request(
@@ -151,6 +172,17 @@ async function runTests() {
     { studentId: newStudentId, timetableSlotId: sampleSlot._id }
   );
   assert(duplicateRes.status === 409 && duplicateRes.body.duplicate === true, 'Duplicate Scan Prevention', `(${duplicateRes.body?.message})`);
+
+  // Clean up created test record
+  if (createdRecordId) {
+    await request({
+      host: 'localhost',
+      port: 5001,
+      path: `/api/attendance/${createdRecordId}`,
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+  }
 
   // 11. Reports - Dashboard Stats
   const dashStats = await request({
