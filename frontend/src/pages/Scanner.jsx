@@ -12,6 +12,7 @@ import {
   HiOutlineStopCircle,
   HiOutlineBookOpen,
   HiOutlineBolt,
+  HiOutlineArrowPath,
 } from 'react-icons/hi2';
 
 const SAMPLE_STUDENT_IDS = [
@@ -37,26 +38,24 @@ const Scanner = () => {
 
   useEffect(() => {
     loadCurrentLecture();
-    return () => stopScanning();
+    const handleFocus = () => loadCurrentLecture();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      stopScanning();
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
-  useEffect(() => {
-    if (location.state?.autoScanStudentId) {
-      const targetId = location.state.autoScanStudentId;
-      window.history.replaceState({}, document.title);
-      setTimeout(() => {
-        onScanSuccess(targetId);
-      }, 500);
-    }
-  }, [location.state]);
-
-  const loadCurrentLecture = async () => {
+  const loadCurrentLecture = async (notify = false) => {
     try {
       const res = await timetableAPI.getCurrent();
       setCurrentLecture(res.data.currentSlot);
       setTodaySlots(res.data.todaySlots || []);
       if (res.data.currentSlot) {
         setSelectedSlot(res.data.currentSlot._id);
+        if (notify) toast.success(`Current lecture: ${res.data.currentSlot.subject}`);
+      } else {
+        if (notify) toast('No active lecture found for current time', { icon: 'ℹ️' });
       }
     } catch (err) {
       console.error('Error loading timetable:', err);
@@ -159,45 +158,82 @@ const Scanner = () => {
     <div className="scanner-container">
       {/* Current Lecture Info */}
       {currentLecture ? (
-        <div className="current-lecture-card">
-          <div className="lecture-icon">
+        <div className="current-lecture-card" style={{ borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.08)' }}>
+          <div className="lecture-icon" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
             <HiOutlineBookOpen />
           </div>
-          <div className="current-lecture-info">
-            <h3>{currentLecture.subject}</h3>
+          <div className="current-lecture-info" style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3>{currentLecture.subject}</h3>
+              <span className="badge badge-present" style={{ fontSize: 10, padding: '2px 8px' }}>
+                ● Active Now
+              </span>
+            </div>
             <p>
               {currentLecture.startTime} – {currentLecture.endTime} • Room{' '}
-              {currentLecture.room} • {currentLecture.className}-{currentLecture.section}
+              {currentLecture.room || 'Main'} • {currentLecture.className}-{currentLecture.section}
+              {currentLecture.teacher?.name && ` • 👨‍🏫 ${currentLecture.teacher.name}`}
             </p>
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => loadCurrentLecture(true)}
+            title="Re-check current lecture"
+            style={{ padding: '6px 12px', fontSize: 12 }}
+          >
+            <HiOutlineArrowPath /> Re-check
+          </button>
         </div>
       ) : (
         <div className="current-lecture-card" style={{ borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.08)' }}>
           <div className="lecture-icon" style={{ background: 'linear-gradient(135deg, #f59e0b, #fbbf24)' }}>
             <HiOutlineExclamationTriangle />
           </div>
-          <div className="current-lecture-info">
-            <h3>No active lecture detected</h3>
-            <p>Select a timetable slot below to record attendance manually</p>
+          <div className="current-lecture-info" style={{ flex: 1 }}>
+            <h3>No active lecture detected for right now</h3>
+            <p>Select a timetable slot below or update slot timings in Timetable</p>
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => loadCurrentLecture(true)}
+            title="Re-check current lecture"
+            style={{ padding: '6px 12px', fontSize: 12 }}
+          >
+            <HiOutlineArrowPath /> Re-check
+          </button>
         </div>
       )}
 
-      {/* Slot selector when no current lecture */}
+      {/* Slot selector */}
       {todaySlots.length > 0 && (
         <div className="form-group" style={{ marginBottom: 20 }}>
-          <label className="form-label">Select Lecture Slot</label>
+          <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Target Lecture Slot</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {selectedSlot ? 'Slot Selected' : 'Auto-detecting from schedule'}
+            </span>
+          </label>
           <select
             className="form-select"
             value={selectedSlot}
             onChange={(e) => setSelectedSlot(e.target.value)}
           >
-            <option value="">Auto-detect (current time)</option>
-            {todaySlots.map((slot) => (
-              <option key={slot._id} value={slot._id}>
-                {slot.startTime}-{slot.endTime} | {slot.subject} | {slot.className}-{slot.section}
+            {currentLecture ? (
+              <option value={currentLecture._id}>
+                ⚡ Auto-Detected Active: {currentLecture.subject} ({currentLecture.startTime}-{currentLecture.endTime})
               </option>
-            ))}
+            ) : (
+              <option value="">⚡ Auto-detect based on current time</option>
+            )}
+            {todaySlots
+              .filter((slot) => !currentLecture || slot._id !== currentLecture._id)
+              .map((slot) => (
+                <option key={slot._id} value={slot._id}>
+                  {slot.startTime}–{slot.endTime} | {slot.subject} | {slot.className}-{slot.section} (Room {slot.room || '—'})
+                </option>
+              ))}
           </select>
         </div>
       )}

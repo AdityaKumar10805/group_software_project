@@ -44,13 +44,23 @@ exports.scanAttendance = async (req, res) => {
     if (timetableSlotId) {
       timetableSlot = await Timetable.findById(timetableSlotId);
     } else {
-      // Auto-detect from timetable
+      // Auto-detect from timetable:
+      // First try matching logged-in user's assigned slot
       timetableSlot = await Timetable.findOne({
         day: dayName,
         teacher: teacherId,
         startTime: { $lte: currentTime },
         endTime: { $gte: currentTime },
       });
+
+      // If not found, match ANY active slot for current day and time (e.g. for admin or subbing)
+      if (!timetableSlot) {
+        timetableSlot = await Timetable.findOne({
+          day: dayName,
+          startTime: { $lte: currentTime },
+          endTime: { $gte: currentTime },
+        });
+      }
     }
 
     if (!timetableSlot) {

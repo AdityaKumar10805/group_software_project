@@ -22,7 +22,7 @@ exports.getTimetable = async (req, res) => {
   }
 };
 
-// GET /api/timetable/current — get current lecture for teacher
+// GET /api/timetable/current — get current lecture
 exports.getCurrentLecture = async (req, res) => {
   try {
     const now = new Date();
@@ -30,20 +30,43 @@ exports.getCurrentLecture = async (req, res) => {
     const dayName = days[now.getDay()];
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    const currentSlot = await Timetable.findOne({
+    // 1. Try to find active slot for the logged-in teacher first
+    let currentSlot = await Timetable.findOne({
       day: dayName,
       teacher: req.user._id,
       startTime: { $lte: currentTime },
       endTime: { $gte: currentTime },
-    }).populate('teacher', 'name');
+    }).populate('teacher', 'name email department');
 
-    // Also get today's remaining slots
-    const todaySlots = await Timetable.find({
-      day: dayName,
-      teacher: req.user._id,
-    })
-      .populate('teacher', 'name')
-      .sort({ startTime: 1 });
+    // 2. If not found (e.g. user is admin, or subbing), find ANY active slot right now
+    if (!currentSlot) {
+      currentSlot = await Timetable.findOne({
+        day: dayName,
+        startTime: { $lte: currentTime },
+        endTime: { $gte: currentTime },
+      }).populate('teacher', 'name email department');
+    }
+
+    // 3. Get today's slots (all slots for admin, or teacher's slots with fallback to all today's slots)
+    let todaySlots = [];
+    if (req.user.role === 'admin') {
+      todaySlots = await Timetable.find({ day: dayName })
+        .populate('teacher', 'name email department')
+        .sort({ startTime: 1 });
+    } else {
+      todaySlots = await Timetable.find({
+        day: dayName,
+        teacher: req.user._id,
+      })
+        .populate('teacher', 'name email department')
+        .sort({ startTime: 1 });
+
+      if (todaySlots.length === 0) {
+        todaySlots = await Timetable.find({ day: dayName })
+          .populate('teacher', 'name email department')
+          .sort({ startTime: 1 });
+      }
+    }
 
     res.json({
       currentSlot,
@@ -52,6 +75,7 @@ exports.getCurrentLecture = async (req, res) => {
       currentTime,
     });
   } catch (error) {
+    console.error('getCurrentLecture error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
