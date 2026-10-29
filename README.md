@@ -115,6 +115,37 @@ Teacher Login → Dashboard → Open Scanner → Scan Student ID Card
 → Save Attendance → Report Generated
 ```
 
+## 24/7 Cloud Deployment (Render + MongoDB Atlas)
+
+To deploy the application permanently so it runs 24/7 even when your laptop is turned off:
+
+### 1. Cloud Database (MongoDB Atlas)
+1. Create a free account at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+2. Deploy a free **M0 Sandbox cluster**
+3. Create a Database User (Username & Password)
+4. Under Network Access, allow IP `0.0.0.0/0` (allow access from anywhere)
+5. Copy your connection string: `mongodb+srv://<username>:<password>@cluster0.mongodb.net/qr_attendance?retryWrites=true&w=majority`
+
+### 2. Cloud Web Service (Render)
+1. Sign in at [render.com](https://render.com) using your GitHub account
+2. Click **New +** → **Web Service**
+3. Select this repository: `AdityaKumar10805/group_software_project`
+4. Render automatically configures via `render.yaml`, or use:
+   - **Environment**: `Node`
+   - **Build Command**: `npm run build`
+   - **Start Command**: `npm start`
+5. Add the following **Environment Variables**:
+   - `MONGODB_URI`: `<Your MongoDB Atlas connection string>`
+   - `JWT_SECRET`: `smartqr_attendance_secret_key_2026`
+   - `NODE_ENV`: `production`
+6. Click **Deploy Web Service**. You will receive a permanent HTTPS link (e.g. `https://smart-qr-attendance.onrender.com`) that runs 24/7!
+
+### 3. Seed Cloud Database (One-time)
+Run locally once pointing to your Atlas connection string to populate the demo users and timetable:
+```bash
+MONGODB_URI="your-atlas-uri" npm run seed
+```
+
 ## License
 
 MIT — Built by Aditya Kumar
