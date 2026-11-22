@@ -134,3 +134,4 @@ export const MOCK_DAILY_REPORT = Array.from({ length: 14 }, (_, i) => {
     totalAbsent: 2 - (i % 2),
   };
 });
+
