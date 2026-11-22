@@ -148,4 +148,10 @@ MONGODB_URI="your-atlas-uri" npm run seed
 
 ## License
 
-MIT — Built by Aditya Kumar
+Built by 
+Akshat Kumar
+Lavi Kumar
+Aditya Kumar
+Talha Sayed
+
+
