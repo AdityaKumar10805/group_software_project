@@ -1,0 +1,21 @@
+{
+  "name": "smart-qr-attendance",
+  "version": "1.0.0",
+  "description": "Smart QR Attendance Management System - Fast, secure, automated classroom attendance recording",
+  "main": "backend/server.js",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build && cd ../backend && npm install",
+    "start": "node backend/server.js",
+    "seed": "node backend/seeds/seed.js",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "keywords": [
+    "qr-attendance",
+    "react",
+    "express",
+    "mongodb"
+  ],
+  "author": "Aditya Kumar",
+  "license": "MIT"
+}
